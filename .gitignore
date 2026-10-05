@@ -1,0 +1,53 @@
+# ===========================================================================
+# Keil MDK-ARM build output (regenerated on every build)
+# ===========================================================================
+code/MDK-ARM/myFOC/
+code/MDK-ARM/*.lst
+code/MDK-ARM/*.o
+code/MDK-ARM/*.crf
+code/MDK-ARM/*.d
+code/MDK-ARM/*.axf
+code/MDK-ARM/*.hex
+code/MDK-ARM/*.map
+code/MDK-ARM/*.htm
+code/MDK-ARM/*.lnp
+code/MDK-ARM/*.dep
+code/MDK-ARM/*.sct
+code/MDK-ARM/*.iex
+code/MDK-ARM/*.build_log.htm
+code/MDK-ARM/*.bak
+
+# Keil RTE components, event recorder stub and local window layout
+code/MDK-ARM/RTE/
+code/MDK-ARM/EventRecorderStub.scvd
+code/MDK-ARM/*.uvguix.*
+
+# ===========================================================================
+# Unused CMSIS bundles
+# Not referenced by code/MDK-ARM/myFOC.uvprojx and not used by the sources.
+# STM32CubeMX restores them from the .ioc file when needed.
+# ===========================================================================
+code/Drivers/CMSIS/DSP/
+code/Drivers/CMSIS/NN/
+code/Drivers/CMSIS/Lib/
+code/Drivers/CMSIS/Core_A/
+code/Drivers/CMSIS/RTOS/
+code/Drivers/CMSIS/RTOS2/
+code/Drivers/CMSIS/docs/
+
+# ===========================================================================
+# Editors / IDE local state
+# ===========================================================================
+.vscode/
+.idea/
+*.log
+*.lock
+*.swp
+*~
+
+# ===========================================================================
+# OS cruft
+# ===========================================================================
+.DS_Store
+Thumbs.db
+desktop.ini
