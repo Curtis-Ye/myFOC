@@ -14,7 +14,7 @@
 
 float open_loop_elec_angle = 0.0f; // 电角度，单位度
 float open_loop_elec_freq = 2.0f;  // 电频率 2Hz
-int16_t open_loop_Uq       = 4000;  // Q15，约 6%
+int16_t open_loop_Uq = 6000;       // Q15，约 6%
 
 // Q15: -32768 ~ 32767 对应 -1.0 ~ 1.0
 // 由 PC 端生成，或初始化时用 sinf 生成一次
@@ -1099,11 +1099,11 @@ ElectricAngle park_inverse(uint16_t angle, int16_t Uq, int16_t Ud)
     // 注意：必须用 int32_t 承接，结果是带符号的。
     // 若用 uint16_t 承接，负半周会回绕成大正数，再经 sat_q15 被钳到 +32767。
     int32_t alpha = ((int32_t)Ud * c - (int32_t)Uq * s) >> 15;
-    int32_t beta  = ((int32_t)Uq * c + (int32_t)Ud * s) >> 15;
+    int32_t beta = ((int32_t)Uq * c + (int32_t)Ud * s) >> 15;
 
     ElectricAngle out;
     out.U_alpha = sat_q15(alpha);
-    out.U_beta  = sat_q15(beta);
+    out.U_beta = sat_q15(beta);
     return out;
 }
 
@@ -1138,12 +1138,18 @@ void FOC_control(float current_angle, int16_t Uq)
     duty.dutyC = (((int32_t)threephase.Uc + 32768) * ARR) >> 16;
 
     // 限幅到 [0, ARR]，防止异常值把 CCR 写得比 ARR 还大
-    if (duty.dutyA < 0)    duty.dutyA = 0;
-    if (duty.dutyA > ARR)  duty.dutyA = ARR;
-    if (duty.dutyB < 0)    duty.dutyB = 0;
-    if (duty.dutyB > ARR)  duty.dutyB = ARR;
-    if (duty.dutyC < 0)    duty.dutyC = 0;
-    if (duty.dutyC > ARR)  duty.dutyC = ARR;
+    if (duty.dutyA < 0)
+        duty.dutyA = 0;
+    if (duty.dutyA > ARR)
+        duty.dutyA = ARR;
+    if (duty.dutyB < 0)
+        duty.dutyB = 0;
+    if (duty.dutyB > ARR)
+        duty.dutyB = ARR;
+    if (duty.dutyC < 0)
+        duty.dutyC = 0;
+    if (duty.dutyC > ARR)
+        duty.dutyC = ARR;
 
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, duty.dutyA);
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, duty.dutyB);
