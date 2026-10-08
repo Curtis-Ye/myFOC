@@ -1,31 +1,28 @@
-/* USER CODE BEGIN Header */
-/**
- ******************************************************************************
- * @file           : main.c
- * @brief          : Main program body
- ******************************************************************************
- * @attention
- *
- * Copyright (c) 2026 STMicroelectronics.
- * All rights reserved.
- *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
- *
- ******************************************************************************
- */
-/* USER CODE END Header */
-/* Includes ------------------------------------------------------------------*/
 #include "init.h"
-#include "FOC.h"
-#include "AS5600.h"
+#include "control.h"
 
-// #define OPEN_TIM3IT
+// #define OPEN_LOOP
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 float angle;
+static volatile float g_angle_mech = 0.0f; /* 主循环写，中断读 */
+volatile uint32_t g_angle_updates = 0;     /* 读取次数，用来看新鲜度 */
+volatile uint32_t g_angle_errors = 0;      /* I2C 失败次数 */
+
+void encoder_task(void)
+{
+  float a = AS5600_ReadAngle(); /* 失败返回 -1.0f */
+  if (a >= 0.0f)
+  {
+    g_angle_mech = a; /* 32 位对齐写，单条 STR，原子 */
+    g_angle_updates++;
+  }
+  else
+  {
+    g_angle_errors++;
+  }
+}
 
 int main(void)
 {
@@ -34,10 +31,9 @@ int main(void)
 
   peripheral_init();
 
-/* USER CODE BEGIN 2 */
-#ifdef OPEN_TIM3IT
+  /* USER CODE BEGIN 2 */
+
   HAL_TIM_Base_Start_IT(&htim3); // 启动定时器中断，用于开环控制
-#endif
 
   /* TIM1 是高级控制定时器：必须启动 PWM 才会置位 MOE 并使能计数器，否则引脚恒为无效电平 */
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
@@ -46,6 +42,7 @@ int main(void)
 
   while (1)
   {
+    encoder_task();
   }
 }
 
@@ -122,6 +119,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   if (htim->Instance == TIM3)
   {
+#ifdef OPEN_LOOP
     FOC_OpenLoop_Update();
+#endif
+    position_control(10);
   }
 }

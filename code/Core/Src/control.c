@@ -68,11 +68,6 @@ void position_control_init(void)
 
 void position_control(float target_angle)
 {
-    /* 读机械角。读失败返回 -1.0f，这一次直接放弃控制，
-       否则会把 -1 当成角度送进 Park 变换，产生一次剧烈的错误输出。 */
-    current_angle = AS5600_ReadAngle();
-    if (current_angle < 0.0f)
-        return;
 
     /* 位置环：误差先归一化，再交给 PID */
     pid_error = angle_error(target_angle, current_angle);
