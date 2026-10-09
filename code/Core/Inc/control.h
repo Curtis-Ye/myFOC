@@ -6,7 +6,7 @@
 #include "AS5600.h"
 
 /* 调试用，可直接在调试器里观察 */
-extern float current_angle; /* 机械角 0~360 */
+extern volatile float current_angle; /* 机械角 0~360 */
 extern float elec_angle;    /* 电角度 0~360 */
 extern float pid_error;     /* 归一化后的角度误差 */
 extern float pid_output;    /* PID 输出（float） */

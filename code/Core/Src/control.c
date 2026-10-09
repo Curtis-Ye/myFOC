@@ -15,7 +15,7 @@
 
 PID pid1;
 
-float current_angle = 0.0f; /* AS5600 读到的机械角，0 ~ 360 */
+volatile float current_angle = 0.0f; /* AS5600 读到的机械角，0 ~ 360 */
 float elec_angle = 0.0f;    /* 换算后的电角度，0 ~ 360 */
 float pid_error = 0.0f;     /* 归一化后的角度误差，调试用 */
 float pid_output = 0.0f;    /* PID 输出（float），调试用 */
@@ -58,9 +58,9 @@ static int16_t uq_from_float(float uq)
 void position_control_init(void)
 {
     PID_Init(&pid1,
-             /*Kp*/ 10.0f,
+             /*Kp*/ 100.0f,
              /*Ki*/ 0.0f,
-             /*Kd*/ 20.0f,
+             /*Kd*/ 0.0f,
              /*max_output*/ UQ_MAX,
              /*min_output*/ -UQ_MAX,
              /*integral_limit*/ 1000.0f);
@@ -68,12 +68,11 @@ void position_control_init(void)
 
 void position_control(float target_angle)
 {
-
     /* 位置环：误差先归一化，再交给 PID */
     pid_error = angle_error(target_angle, current_angle);
     pid_output = PID_calculate_error(&pid1, pid_error);
 
-    /* 机械角 -> 电角度。*/
+    /* 机械角 -> 电角度 */
     elec_angle = current_angle * (float)POLE_PAIRS;
     while (elec_angle >= 360.0f)
         elec_angle -= 360.0f;

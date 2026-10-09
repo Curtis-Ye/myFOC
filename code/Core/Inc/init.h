@@ -7,6 +7,8 @@
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
+#include "PID.h"
+#include "control.h"
 
 void peripheral_init(void);
 

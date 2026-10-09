@@ -1165,6 +1165,6 @@ void FOC_OpenLoop_Update(void)
     if (open_loop_elec_angle >= 360.0f)
         open_loop_elec_angle -= 360.0f;
 
-    // 调用你的 FOC 函数
+    // 调用 FOC 函数
     FOC_control(open_loop_elec_angle, open_loop_Uq);
 }
