@@ -58,7 +58,7 @@ static int16_t uq_from_float(float uq)
 void position_control_init(void)
 {
     PID_Init(&pid1,
-             /*Kp*/ 100.0f,
+             /*Kp*/ 1500.0f,
              /*Ki*/ 0.0f,
              /*Kd*/ 0.0f,
              /*max_output*/ UQ_MAX,

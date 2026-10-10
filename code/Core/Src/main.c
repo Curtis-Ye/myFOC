@@ -5,9 +5,11 @@
 #define POSITION_LOOP
 
 void SystemClock_Config(void);
-extern volatile float current_angle;            // 获取编码器角度
+extern volatile float current_angle;   // 获取编码器角度
 volatile uint32_t g_angle_updates = 0; /* 读取次数，用来看数据新鲜度 */
 volatile uint32_t g_angle_errors = 0;  /* I2C 失败次数 */
+extern uint8_t rx_data;
+volatile float usart_angle = 0; // 从串口获取的目标角度
 
 /* 实时获取编码器角度 */
 void encoder_task(void)
@@ -15,7 +17,7 @@ void encoder_task(void)
   float a = AS5600_ReadAngle(); /* 失败返回 -1.0f */
   if (a >= 0.0f)
   {
-    current_angle = a; /* 32 位对齐写，单条 STR，原子 */
+    current_angle = a;
     g_angle_updates++;
   }
   else
@@ -27,13 +29,14 @@ void encoder_task(void)
 int main(void)
 {
 
-	HAL_Init();
-	
+  HAL_Init();
+
   SystemClock_Config();
 
   peripheral_init(); // 外设初始化
 
-  HAL_TIM_Base_Start_IT(&htim3); // 启动定时器中断，用于开环控制
+  HAL_TIM_Base_Start_IT(&htim3);             // 启动定时器中断，用于开环控制
+  HAL_UART_Receive_IT(&huart2, &rx_data, 1); // 启动串口接收中断
 
   /* TIM1 是高级控制定时器：必须启动 PWM 才会置位 MOE 并使能计数器，否则引脚恒为无效电平 */
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
@@ -43,6 +46,7 @@ int main(void)
   while (1)
   {
     encoder_task();
+    usart_angle = get_angle();
   }
 }
 
@@ -124,7 +128,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 #endif
 
 #ifdef POSITION_LOOP
-    position_control(10.0f);
+    position_control(usart_angle);
 #endif
   }
 }
