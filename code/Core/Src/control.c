@@ -60,7 +60,7 @@ void position_control_init(void)
     PID_Init(&pid1,
              /*Kp*/ 1500.0f,
              /*Ki*/ 0.0f,
-             /*Kd*/ 0.0f,
+             /*Kd*/ 1000.0f,
              /*max_output*/ UQ_MAX,
              /*min_output*/ -UQ_MAX,
              /*integral_limit*/ 1000.0f);

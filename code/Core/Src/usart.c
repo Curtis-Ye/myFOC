@@ -126,21 +126,51 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if (huart->Instance == USART2)
   {
+    /* ★ 关键修正：Windows/串口助手的行结束符是 CRLF（"\r\n"）两个字符。
+       收到 '\r' 时已经把字符串收尾、rx_index 归零；
+       紧接着 '\n' 又进来，若不再判断一次，就会执行 rx_buffer[0] = '\0'，
+       把整行的第一个字符抹成 0 —— 这就是"第一个元素一直是 0"的原因。
+       用 rx_index > 0 判断"这一行确实收到过内容"，重复的结束符直接忽略。 */
     if (rx_data == '\n' || rx_data == '\r')
     {
-      rx_buffer[rx_index] = '\0'; // 字符串结束符
-      rx_complete = 1;            // 标记接收完成
-      rx_index = 0;               // 准备下一次接收
+      if (rx_index > 0U)
+      {
+        rx_buffer[rx_index] = '\0'; // 字符串结束符
+        rx_complete = 1;            // 标记接收完成
+        rx_index = 0;               // 准备下一次接收
+      }
+      /* rx_index == 0 说明前一个字符已经是行结束符，这个 '\n' 忽略掉 */
     }
     else
     {
       if (rx_index < RX_BUFFER_SIZE - 1)
       {
-        rx_buffer[rx_index++] = rx_data;
+        rx_buffer[rx_index] = rx_data;
+        rx_index++;
       }
     }
-    // 重新开启接收中断
-    HAL_UART_Receive_IT(&huart2, &rx_data, 1);
+    // 重新开启接收中断（用 huart，不要硬编码 &huart2）
+    HAL_UART_Receive_IT(huart, &rx_data, 1);
+  }
+}
+
+/* UART 出错（ORE 溢出 / FE 帧错误 / NE 噪声 / PE 校验错）时，
+   HAL 会中止接收并置 RxState = READY，但【不会自动重启】。
+   不加这个回调，串口就永久哑了 —— 而 115200 下偶发噪声很常见。 */
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+  if (huart->Instance == USART2)
+  {
+    /* F1 上这四个宏都映射到"读 SR 再读 DR"的清标志序列 */
+    __HAL_UART_CLEAR_OREFLAG(huart);
+    __HAL_UART_CLEAR_FEFLAG(huart);
+    __HAL_UART_CLEAR_NEFLAG(huart);
+    __HAL_UART_CLEAR_PEFLAG(huart);
+
+    huart->ErrorCode = HAL_UART_ERROR_NONE;
+
+    rx_index = 0; /* 出错时这一行作废，等下一行重新同步 */
+    HAL_UART_Receive_IT(huart, &rx_data, 1);
   }
 }
 
