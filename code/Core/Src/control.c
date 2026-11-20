@@ -7,8 +7,9 @@
 #define UQ_MAX 30000.0f
 
 /* 位置环调用频率，必须和实际调用位置一致（TIM3 中断或主循环节拍）。
+   TIM3: 72MHz / (71+1) / (499+1) = 2 kHz，见 tim.c 的 MX_TIM3_Init()。
    PID 的 Kp/Ki/Kd 都以这个周期为前提，改了这里参数要重调。 */
-#define CTRL_FREQ_HZ 1000.0f
+#define CTRL_FREQ_HZ 2000.0f
 
 /* ============================ 全局量 ============================ */
 /* 都放在这里，方便调试器直接观察 */
@@ -16,10 +17,12 @@
 PID pid1;
 
 volatile float current_angle = 0.0f; /* AS5600 读到的机械角，0 ~ 360 */
-float elec_angle = 0.0f;    /* 换算后的电角度，0 ~ 360 */
-float pid_error = 0.0f;     /* 归一化后的角度误差，调试用 */
-float pid_output = 0.0f;    /* PID 输出（float），调试用 */
-int16_t uq_out = 0;         /* 最终送给 FOC 的 Uq，调试用 */
+float elec_angle = 0.0f;             /* 换算后的电角度，0 ~ 360 */
+float pid_error = 0.0f;              /* 归一化后的角度误差，调试用 */
+float pid_output = 0.0f;             /* PID 输出（float），调试用 */
+int16_t uq_out = 0;                  /* 最终送给 FOC 的 Uq，调试用 */
+volatile uint16_t current_velocity_angle = 0;
+volatile uint16_t last_velocity_angle = 0;
 
 /* ============================ 内部函数 ============================ */
 
@@ -81,4 +84,31 @@ void position_control(float target_angle)
 
     uq_out = uq_from_float(pid_output);
     FOC_control(elec_angle, uq_out);
+}
+
+/* 相邻两次采样的角度差 -> 速度（LSB/s）
+   1) 两个 uint16_t 先转 int32_t 再相减，得到 -4095~4095 的有符号角度差；
+   2) 12 位编码器跨 0/4095 时补偿 ±4096，阈值取半圈 2048；
+   3) 静止时 AS5600 有 ±1 LSB 量化噪声，2 kHz 下 1 LSB 就是 2000 LSB/s，
+      必须加死区，否则速度会一直跳；
+   4) 峰值约 ±2048 * 2000，int16_t 装不下，返回值必须是 int32_t。 */
+int32_t get_raw_velocity(void)
+{
+    int32_t delta = (int32_t)current_velocity_angle - (int32_t)last_velocity_angle;
+
+    if (delta > 2048)
+    {
+        delta -= 4096;
+    }
+    else if (delta < -2048)
+    {
+        delta += 4096;
+    }
+
+    if (delta >= -1 && delta <= 1)
+    {
+        delta = 0;
+    }
+
+    return delta * (int32_t)CTRL_FREQ_HZ;
 }

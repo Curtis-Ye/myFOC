@@ -2,29 +2,16 @@
 #include "control.h"
 
 // #define OPEN_LOOP
-#define POSITION_LOOP
+// #define POSITION_LOOP
 
 void SystemClock_Config(void);
-extern volatile float current_angle;   // 获取编码器角度
-volatile uint32_t g_angle_updates = 0; /* 读取次数，用来看数据新鲜度 */
+
+/* 跨文件共享的变量统一在 control.h 声明，这里不再另写 extern */
+volatile uint32_t g_angle_updates = 0; /* 编码器成功采样次数，用来看数据新鲜度 */
 volatile uint32_t g_angle_errors = 0;  /* I2C 失败次数 */
 extern uint8_t rx_data;
-volatile float usart_angle = 0; // 从串口获取的目标角度
-
-/* 实时获取编码器角度 */
-void encoder_task(void)
-{
-  float a = AS5600_ReadAngle(); /* 失败返回 -1.0f */
-  if (a >= 0.0f)
-  {
-    current_angle = a;
-    g_angle_updates++;
-  }
-  else
-  {
-    g_angle_errors++;
-  }
-}
+volatile float usart_angle = 0;    // 从串口获取的目标角度
+volatile int32_t temp = 0;         // 速度观测值（LSB/s），调试用
 
 int main(void)
 {
@@ -45,7 +32,7 @@ int main(void)
 
   while (1)
   {
-    encoder_task();
+    /* I2C 只在 TIM3 中断里采样，主循环不碰 hi2c1，避免阻塞式 HAL_I2C 被中断重入 */
     usart_angle = get_angle();
   }
 }
@@ -123,6 +110,25 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   if (htim->Instance == TIM3)
   {
+    /* 编码器单点采样：整个工程只有这里访问 I2C，杜绝主循环 / 中断并发重入 */
+    uint16_t raw = AS5600_ReadRawAngle();
+
+    if (raw != 0xFFFF)
+    {
+      last_velocity_angle = current_velocity_angle;
+      current_velocity_angle = raw;
+      current_angle = raw * (360.0f / 4096.0f); /* 位置环与速度环共用同一份角度快照 */
+      temp = get_raw_velocity();
+      g_angle_updates++;
+    }
+    else
+    {
+      /* 本周期读数无效：保持上次角度、速度置 0，别让 0xFFFF 变成尖峰 */
+      last_velocity_angle = current_velocity_angle;
+      temp = 0;
+      g_angle_errors++;
+    }
+
 #ifdef OPEN_LOOP
     FOC_OpenLoop_Update();
 #endif
