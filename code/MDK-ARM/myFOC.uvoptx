@@ -158,67 +158,62 @@
         <Ww>
           <count>0</count>
           <WinNumber>1</WinNumber>
-          <ItemText>current_angle</ItemText>
+          <ItemText>g_angle_errors</ItemText>
         </Ww>
         <Ww>
           <count>1</count>
           <WinNumber>1</WinNumber>
-          <ItemText>g_angle_errors</ItemText>
+          <ItemText>uq_out,0x0A</ItemText>
         </Ww>
         <Ww>
           <count>2</count>
           <WinNumber>1</WinNumber>
-          <ItemText>uq_out,0x0A</ItemText>
+          <ItemText>usart_angle</ItemText>
         </Ww>
         <Ww>
           <count>3</count>
           <WinNumber>1</WinNumber>
-          <ItemText>usart_angle</ItemText>
+          <ItemText>rx_buffer,0x10</ItemText>
         </Ww>
         <Ww>
           <count>4</count>
           <WinNumber>1</WinNumber>
-          <ItemText>rx_buffer,0x10</ItemText>
+          <ItemText>AS5600_LastSR1</ItemText>
         </Ww>
         <Ww>
           <count>5</count>
           <WinNumber>1</WinNumber>
-          <ItemText>AS5600_LastSR1</ItemText>
+          <ItemText>AS5600_LastSR2</ItemText>
         </Ww>
         <Ww>
           <count>6</count>
           <WinNumber>1</WinNumber>
-          <ItemText>AS5600_LastSR2</ItemText>
+          <ItemText>AS5600_RecoverCount</ItemText>
         </Ww>
         <Ww>
           <count>7</count>
           <WinNumber>1</WinNumber>
-          <ItemText>AS5600_RecoverCount</ItemText>
+          <ItemText>AS5600_ConsecFail</ItemText>
         </Ww>
         <Ww>
           <count>8</count>
           <WinNumber>1</WinNumber>
-          <ItemText>AS5600_ConsecFail</ItemText>
+          <ItemText>AS5600_FailCount</ItemText>
         </Ww>
         <Ww>
           <count>9</count>
           <WinNumber>1</WinNumber>
-          <ItemText>AS5600_FailCount</ItemText>
+          <ItemText>last_angle,0x0A</ItemText>
         </Ww>
         <Ww>
           <count>10</count>
           <WinNumber>1</WinNumber>
-          <ItemText>last_velocity_angle,0x0A</ItemText>
+          <ItemText>current_angle</ItemText>
         </Ww>
         <Ww>
           <count>11</count>
           <WinNumber>1</WinNumber>
-          <ItemText>current_velocity_angle,0x0A</ItemText>
-        </Ww>
-        <Ww>
-          <count>12</count>
-          <WinNumber>1</WinNumber>
-          <ItemText>temp,0x0A</ItemText>
+          <ItemText>delta_angle</ItemText>
         </Ww>
       </WatchWindow1>
       <Tracepoint>

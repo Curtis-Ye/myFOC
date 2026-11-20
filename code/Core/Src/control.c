@@ -17,12 +17,12 @@
 PID pid1;
 
 volatile float current_angle = 0.0f; /* AS5600 读到的机械角，0 ~ 360 */
-float elec_angle = 0.0f;             /* 换算后的电角度，0 ~ 360 */
-float pid_error = 0.0f;              /* 归一化后的角度误差，调试用 */
-float pid_output = 0.0f;             /* PID 输出（float），调试用 */
-int16_t uq_out = 0;                  /* 最终送给 FOC 的 Uq，调试用 */
-volatile uint16_t current_velocity_angle = 0;
-volatile uint16_t last_velocity_angle = 0;
+volatile float last_angle = 0.0f;
+float elec_angle = 0.0f; /* 换算后的电角度，0 ~ 360 */
+float pid_error = 0.0f;  /* 归一化后的角度误差，调试用 */
+float pid_output = 0.0f; /* PID 输出（float），调试用 */
+volatile float delta_angle = 0.0f; /* 角度差（度/采样周期），调试用，必须 volatile */
+int16_t uq_out = 0; /* 最终送给 FOC 的 Uq，调试用 */
 
 /* ============================ 内部函数 ============================ */
 
@@ -86,29 +86,38 @@ void position_control(float target_angle)
     FOC_control(elec_angle, uq_out);
 }
 
-/* 相邻两次采样的角度差 -> 速度（LSB/s）
-   1) 两个 uint16_t 先转 int32_t 再相减，得到 -4095~4095 的有符号角度差；
-   2) 12 位编码器跨 0/4095 时补偿 ±4096，阈值取半圈 2048；
-   3) 静止时 AS5600 有 ±1 LSB 量化噪声，2 kHz 下 1 LSB 就是 2000 LSB/s，
-      必须加死区，否则速度会一直跳；
-   4) 峰值约 ±2048 * 2000，int16_t 装不下，返回值必须是 int32_t。 */
-int32_t get_raw_velocity(void)
+/* 相邻两次采样的机械角差 -> 速度（度/s）
+   1) 必须先算差、后更新 last_angle；反过来的话差值恒为 0；
+   2) 角度是圆周量，跨 0/360 时归一化到 (-180, 180]；
+   3) delta_angle 保存未经死区的原始角度差，专供调试窗口观察，手转一定能看到；
+   4) 死区只作用于速度输出。current_angle 单位是度，1 LSB ≈ 0.088°，
+      照抄 LSB 版本的 ±1 会变成 ±1 度，把手转的微小角度差全部吃掉；
+   5) 采样 2 kHz，delta * CTRL_FREQ_HZ = 度/s。 */
+float get_raw_velocity(void)
 {
-    int32_t delta = (int32_t)current_velocity_angle - (int32_t)last_velocity_angle;
+    float delta = current_angle - last_angle; /* 先算差 */
 
-    if (delta > 2048)
+    if (delta > 180.0f)
     {
-        delta -= 4096;
+        delta -= 360.0f;
     }
-    else if (delta < -2048)
+    else if (delta <= -180.0f)
     {
-        delta += 4096;
-    }
-
-    if (delta >= -1 && delta <= 1)
-    {
-        delta = 0;
+        delta += 360.0f;
     }
 
-    return delta * (int32_t)CTRL_FREQ_HZ;
+    last_angle = current_angle;  /* 最后才更新快照 */
+
+    delta_angle = delta;         /* 原始角度差，不做死区，调试观察用 */
+
+    /* 死区只压速度输出：阈值 0.1° 略大于 1 LSB(≈0.088°)，能滤掉静止时的量化噪声。
+       代价是低于约 200°/s 的真实速度也会被吃掉——这是每周期测速的固有分辨率限制，
+       做速度闭环时请改成分频累计测速 + 低通滤波，不要靠调大硬阈值。 */
+    float vel_delta = delta;
+    if (vel_delta > -0.1f && vel_delta < 0.1f)
+    {
+        vel_delta = 0.0f;
+    }
+
+    return vel_delta * CTRL_FREQ_HZ; /* 度/s */
 }

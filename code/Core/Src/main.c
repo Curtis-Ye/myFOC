@@ -10,8 +10,22 @@ void SystemClock_Config(void);
 volatile uint32_t g_angle_updates = 0; /* 编码器成功采样次数，用来看数据新鲜度 */
 volatile uint32_t g_angle_errors = 0;  /* I2C 失败次数 */
 extern uint8_t rx_data;
-volatile float usart_angle = 0;    // 从串口获取的目标角度
-volatile int32_t temp = 0;         // 速度观测值（LSB/s），调试用
+volatile float usart_angle = 0;   // 从串口获取的目标角度
+volatile float g_velocity = 0.0f; // 速度观测值（度/s），调试用
+
+void encoder_task(void)
+{
+  float a = AS5600_ReadAngle(); /* 失败返回 -1.0f */
+  if (a >= 0.0f)
+  {
+    current_angle = a;
+    g_angle_updates++;
+  }
+  else
+  {
+    g_angle_errors++;
+  }
+}
 
 int main(void)
 {
@@ -32,7 +46,7 @@ int main(void)
 
   while (1)
   {
-    /* I2C 只在 TIM3 中断里采样，主循环不碰 hi2c1，避免阻塞式 HAL_I2C 被中断重入 */
+    encoder_task();
     usart_angle = get_angle();
   }
 }
@@ -110,25 +124,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   if (htim->Instance == TIM3)
   {
-    /* 编码器单点采样：整个工程只有这里访问 I2C，杜绝主循环 / 中断并发重入 */
-    uint16_t raw = AS5600_ReadRawAngle();
-
-    if (raw != 0xFFFF)
-    {
-      last_velocity_angle = current_velocity_angle;
-      current_velocity_angle = raw;
-      current_angle = raw * (360.0f / 4096.0f); /* 位置环与速度环共用同一份角度快照 */
-      temp = get_raw_velocity();
-      g_angle_updates++;
-    }
-    else
-    {
-      /* 本周期读数无效：保持上次角度、速度置 0，别让 0xFFFF 变成尖峰 */
-      last_velocity_angle = current_velocity_angle;
-      temp = 0;
-      g_angle_errors++;
-    }
-
 #ifdef OPEN_LOOP
     FOC_OpenLoop_Update();
 #endif
@@ -136,5 +131,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 #ifdef POSITION_LOOP
     position_control(usart_angle);
 #endif
+
+    /* 速度换算统一交给 get_raw_velocity()：内部先算差、后更新 last_angle。
+       千万不要先写 last_angle = current_angle 再相减，那样差值恒为 0。 */
+    g_velocity = get_raw_velocity();
   }
 }
