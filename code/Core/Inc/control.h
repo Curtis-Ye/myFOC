@@ -11,13 +11,15 @@
 extern volatile float current_angle; /* 当前机械角 0~360 */
 extern volatile float last_angle;    /* 上一次机械角 0~360 */
 
-extern float elec_angle; /* 电角度 0~360 */
-extern float pid_error;  /* 归一化后的角度误差 */
-extern float pid_output; /* PID 输出（float） */
-extern int16_t uq_out;   /* 送给 FOC 的 Uq */
+extern float elec_angle;           /* 电角度 0~360 */
+extern float pid_error;            /* 归一化后的角度误差 */
+extern float pid_output;           /* PID 输出（float） */
+extern int16_t uq_out;             /* 送给 FOC 的 Uq */
 extern volatile float delta_angle; /* 角度差（度/采样周期），调试用 */
 
 void position_control_init(void); /* 上电调用一次 */
 void position_control(float target_angle);
-float get_raw_velocity(void); /* 速度，单位 度/s；内部会更新 last_angle */
+float get_velocity(void); /* 速度，单位 度/s；内部会更新 last_angle */
+void velocity_control_init(void);
+void velocity_control(float target_velocity);
 #endif

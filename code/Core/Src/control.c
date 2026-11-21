@@ -15,14 +15,15 @@
 /* 都放在这里，方便调试器直接观察 */
 
 PID pid1;
+PID pid2;
 
 volatile float current_angle = 0.0f; /* AS5600 读到的机械角，0 ~ 360 */
 volatile float last_angle = 0.0f;
-float elec_angle = 0.0f; /* 换算后的电角度，0 ~ 360 */
-float pid_error = 0.0f;  /* 归一化后的角度误差，调试用 */
-float pid_output = 0.0f; /* PID 输出（float），调试用 */
+float elec_angle = 0.0f;           /* 换算后的电角度，0 ~ 360 */
+float pid_error = 0.0f;            /* 归一化后的角度误差，调试用 */
+float pid_output = 0.0f;           /* PID 输出（float），调试用 */
 volatile float delta_angle = 0.0f; /* 角度差（度/采样周期），调试用，必须 volatile */
-int16_t uq_out = 0; /* 最终送给 FOC 的 Uq，调试用 */
+int16_t uq_out = 0;                /* 最终送给 FOC 的 Uq，调试用 */
 
 /* ============================ 内部函数 ============================ */
 
@@ -93,7 +94,7 @@ void position_control(float target_angle)
    4) 死区只作用于速度输出。current_angle 单位是度，1 LSB ≈ 0.088°，
       照抄 LSB 版本的 ±1 会变成 ±1 度，把手转的微小角度差全部吃掉；
    5) 采样 2 kHz，delta * CTRL_FREQ_HZ = 度/s。 */
-float get_raw_velocity(void)
+float get_velocity(void)
 {
     float delta = current_angle - last_angle; /* 先算差 */
 
@@ -106,9 +107,9 @@ float get_raw_velocity(void)
         delta += 360.0f;
     }
 
-    last_angle = current_angle;  /* 最后才更新快照 */
+    last_angle = current_angle; /* 最后才更新快照 */
 
-    delta_angle = delta;         /* 原始角度差，不做死区，调试观察用 */
+    delta_angle = delta; /* 原始角度差，不做死区，调试观察用 */
 
     /* 死区只压速度输出：阈值 0.1° 略大于 1 LSB(≈0.088°)，能滤掉静止时的量化噪声。
        代价是低于约 200°/s 的真实速度也会被吃掉——这是每周期测速的固有分辨率限制，
@@ -120,4 +121,35 @@ float get_raw_velocity(void)
     }
 
     return vel_delta * CTRL_FREQ_HZ; /* 度/s */
+}
+
+/* 速度环一般用PI控制，P用来控制响应速度，I用来消除稳态误差，
+    D很少用，因为会放大编码器速度测量噪声。 */
+void velocity_control_init(void)
+{
+    PID_Init(&pid2,
+             /*Kp*/ 1500.0f,
+             /*Ki*/ 0.0f,
+             /*Kd*/ 0.0f,
+             /*max_output*/ UQ_MAX,
+             /*min_output*/ -UQ_MAX,
+             /*integral_limit*/ 1000.0f);
+}
+
+void velocity_control(float target_velocity)
+{
+    /* 位置环：误差先归一化，再交给 PID */
+    float current_velocity = get_velocity();
+    pid_error = target_velocity - current_angle;
+    pid_output = PID_calculate_error(&pid2, pid_error);
+
+    /* 机械角 -> 电角度 */
+    elec_angle = current_angle * (float)POLE_PAIRS;
+    while (elec_angle >= 360.0f)
+        elec_angle -= 360.0f;
+    while (elec_angle < 0.0f)
+        elec_angle += 360.0f;
+
+    uq_out = uq_from_float(pid_output);
+    FOC_control(elec_angle, uq_out);
 }

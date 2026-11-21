@@ -3,6 +3,7 @@
 
 // #define OPEN_LOOP
 // #define POSITION_LOOP
+#define VELOCITY_LOOP
 
 void SystemClock_Config(void);
 
@@ -132,8 +133,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     position_control(usart_angle);
 #endif
 
-    /* 速度换算统一交给 get_raw_velocity()：内部先算差、后更新 last_angle。
-       千万不要先写 last_angle = current_angle 再相减，那样差值恒为 0。 */
-    g_velocity = get_raw_velocity();
+#ifdef VELOCITY_LOOP
+    velocity_control(0.0f);
+#endif
+
+    g_velocity = get_velocity();
   }
 }
