@@ -34,7 +34,7 @@ extern "C"
   {
     SIMPLE,
     USART
-  };
+  } Mode;
 
   /* Exported functions prototypes ---------------------------------------------*/
   void Error_Handler(void);

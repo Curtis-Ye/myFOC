@@ -32,7 +32,7 @@ extern "C"
   extern UART_HandleTypeDef huart2;
 
   void MX_USART2_UART_Init(void);
-  float data_process(void)
+  float data_process(void);
 
 #ifdef __cplusplus
 }
