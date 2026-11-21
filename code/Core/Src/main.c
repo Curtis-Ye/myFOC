@@ -11,8 +11,10 @@ void SystemClock_Config(void);
 volatile uint32_t g_angle_updates = 0; /* 编码器成功采样次数，用来看数据新鲜度 */
 volatile uint32_t g_angle_errors = 0;  /* I2C 失败次数 */
 extern uint8_t rx_data;
-volatile float usart_angle = 0;   // 从串口获取的目标角度
+volatile float usart_data = 0.0;  // 从串口获取的数据
 volatile float g_velocity = 0.0f; // 速度观测值（度/s），调试用
+
+uint8_t current_mode = SIMPLE; // 默认模式：普通模式；串口模式将其配置为USART
 
 void encoder_task(void)
 {
@@ -48,7 +50,7 @@ int main(void)
   while (1)
   {
     encoder_task();
-    usart_angle = get_angle();
+    usart_data = data_process();
   }
 }
 
@@ -125,18 +127,27 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   if (htim->Instance == TIM3)
   {
+    /* 每个控制周期只测一次速度：get_velocity() 会更新 last_angle 和 delta_angle，
+       重复调用会让第二次的 delta 恒为 0，把调试变量洗掉。 */
+    float v = get_velocity();
+    g_velocity = v;
+
 #ifdef OPEN_LOOP
     FOC_OpenLoop_Update();
 #endif
 
 #ifdef POSITION_LOOP
-    position_control(usart_angle);
+    if (current_mode == SIMPLE)
+      position_control(0.0f);
+    else if (current_mode == USART)
+      velocity_control(usart_data);
 #endif
 
 #ifdef VELOCITY_LOOP
-    velocity_control(0.0f);
+    if (current_mode == SIMPLE)
+      velocity_control(-3600.0f, v);
+    else if (current_mode == USART)
+      velocity_control(usart_data, v);
 #endif
-
-    g_velocity = get_velocity();
   }
 }

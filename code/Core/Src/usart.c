@@ -36,14 +36,6 @@ UART_HandleTypeDef huart2;
 
 void MX_USART2_UART_Init(void)
 {
-
-  /* USER CODE BEGIN USART2_Init 0 */
-
-  /* USER CODE END USART2_Init 0 */
-
-  /* USER CODE BEGIN USART2_Init 1 */
-
-  /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
   huart2.Init.BaudRate = 115200;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
@@ -56,9 +48,6 @@ void MX_USART2_UART_Init(void)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN USART2_Init 2 */
-
-  /* USER CODE END USART2_Init 2 */
 }
 
 void HAL_UART_MspInit(UART_HandleTypeDef *uartHandle)
@@ -67,10 +56,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef *uartHandle)
   GPIO_InitTypeDef GPIO_InitStruct = {0};
   if (uartHandle->Instance == USART2)
   {
-    /* USER CODE BEGIN USART2_MspInit 0 */
 
-    /* USER CODE END USART2_MspInit 0 */
-    /* USART2 clock enable */
     __HAL_RCC_USART2_CLK_ENABLE();
 
     __HAL_RCC_GPIOA_CLK_ENABLE();
@@ -91,9 +77,6 @@ void HAL_UART_MspInit(UART_HandleTypeDef *uartHandle)
     /* USART2 interrupt Init */
     HAL_NVIC_SetPriority(USART2_IRQn, 1, 0);
     HAL_NVIC_EnableIRQ(USART2_IRQn);
-    /* USER CODE BEGIN USART2_MspInit 1 */
-
-    /* USER CODE END USART2_MspInit 1 */
   }
 }
 
@@ -102,23 +85,12 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef *uartHandle)
 
   if (uartHandle->Instance == USART2)
   {
-    /* USER CODE BEGIN USART2_MspDeInit 0 */
-
-    /* USER CODE END USART2_MspDeInit 0 */
-    /* Peripheral clock disable */
     __HAL_RCC_USART2_CLK_DISABLE();
 
-    /**USART2 GPIO Configuration
-    PA2     ------> USART2_TX
-    PA3     ------> USART2_RX
-    */
     HAL_GPIO_DeInit(GPIOA, GPIO_PIN_2 | GPIO_PIN_3);
 
     /* USART2 interrupt Deinit */
     HAL_NVIC_DisableIRQ(USART2_IRQn);
-    /* USER CODE BEGIN USART2_MspDeInit 1 */
-
-    /* USER CODE END USART2_MspDeInit 1 */
   }
 }
 
@@ -174,8 +146,8 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
   }
 }
 
-float get_angle(void)
+float data_process(void)
 {
-  float angle = atof(rx_buffer);
-  return angle;
+  float data = atof(rx_buffer);
+  return data;
 }

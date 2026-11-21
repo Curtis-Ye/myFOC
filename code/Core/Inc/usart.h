@@ -29,22 +29,10 @@ extern "C"
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
-  /* USER CODE BEGIN Includes */
-
-  /* USER CODE END Includes */
-
   extern UART_HandleTypeDef huart2;
 
-  /* USER CODE BEGIN Private defines */
-
-  /* USER CODE END Private defines */
-
   void MX_USART2_UART_Init(void);
-  float get_angle(void);
-
-  /* USER CODE BEGIN Prototypes */
-
-  /* USER CODE END Prototypes */
+  float data_process(void)
 
 #ifdef __cplusplus
 }
