@@ -28,7 +28,7 @@ volatile uint8_t AS5600_Agc = 0;
 volatile uint16_t AS5600_Magnitude = 0;
 
 /* ==================== 参数 ==================== */
-
+volatile static uint64_t total_machine_angle = UINT64_MAX / 2;
 /* 单次传输超时。原来用 100ms —— 一次总线卡死就要瞎掉 100ms（=200 个控制周期）。
    注意：开头等待 BUSY 标志清 0 的那一步用的是 HAL 内部的固定 25ms，不受这个参数影响。 */
 #define AS5600_TIMEOUT_MS 3U
@@ -167,4 +167,27 @@ void AS5600_ReadDiagnostics(void)
 
     if (HAL_I2C_Mem_Read(&hi2c1, AS5600_I2C_ADDR, 0x1B, I2C_MEMADD_SIZE_8BIT, m, 2, 100) == HAL_OK)
         AS5600_Magnitude = (uint16_t)((((uint16_t)m[0] << 8) | m[1]) & 0x0FFF);
+}
+
+void encoder_zeroing(void)
+{
+    /* delay to wait for the power supply voltage to be normal */
+    delayms(1000);
+
+    /* set that there is only a magnetic field on the straight axis. */
+    // foc_calculate_dutycycle(0, CALI_TORQUE, 0, &u, &v, &w);
+    // update_pwm_dutycycle(u, v, w);
+    FOC_control(0, open_loop_Uq);
+    delayms(300);
+    elec_angle_offset = 0;
+    total_machine_angle = UINT64_MAX / 2;
+
+    /* read the angle at this time as the offset angle */
+    elec_angle_offset = AS5600_ReadAngle();
+
+    /* zero the torque in all directions to release the motor */
+    // foc_calculate_dutycycle(0, 0, 0, &u, &v, &w);
+    // update_pwm_dutycycle(u, v, w);
+    FOC_control(0, 0);
+    delayms(300);
 }

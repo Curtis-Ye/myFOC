@@ -1,6 +1,5 @@
 #include <stdint.h>
 #include "FOC.h"
-#include "tim.h"
 
 /* 占空比满量程直接取 TIM1 的 ARR，避免 tim.c 与本文件两处硬编码不一致 */
 #define ARR ((int32_t)htim1.Init.Period)
@@ -14,7 +13,8 @@
 
 float open_loop_elec_angle = 0.0f; // 电角度，单位度
 float open_loop_elec_freq = 2.0f;  // 电频率 2Hz
-int16_t open_loop_Uq = 6000;       // Q15，约 6%
+
+volatile unsigned char phase_sequence = 0;
 
 // Q15: -32768 ~ 32767 对应 -1.0 ~ 1.0
 // 由 PC 端生成，或初始化时用 sinf 生成一次
@@ -1167,4 +1167,69 @@ void FOC_OpenLoop_Update(void)
 
     // 调用 FOC 函数
     FOC_control(open_loop_elec_angle, open_loop_Uq);
+}
+
+void foc_calibrate_phase(void)
+{
+    unsigned short last_angle = 0, positive_counter = 0;
+    float angle = 0;
+
+    /* set that there is only a magnetic field on the straight axis */
+    // foc_calculate_dutycycle(0, CALI_TORQUE, 0, &u, &v, &w);
+    // update_pwm_dutycycle(u, v, w);
+    FOC_control(0, open_loop_Uq);
+    delayms(1000);
+
+    for (unsigned char counter = 0; counter < 50; ++counter)
+    {
+        /* measure current motor angle */
+        unsigned short current_angle = AS5600_ReadAngle();
+
+        /* judge whether the current angle increases */
+        if (current_angle > last_angle)
+            positive_counter++;
+
+        /* update last angle as current angle */
+        last_angle = current_angle;
+
+        /* set that there is only a magnetic field on the straight axis */
+        // foc_calculate_dutycycle(angle, CALI_TORQUE, 0, &u, &v, &w);
+        FOC_control(0, open_loop_Uq);
+        angle += 0.2f;
+        // update_pwm_dutycycle(u, v, w);
+        delayms(20);
+    }
+    for (unsigned char counter = 0; counter < 50; ++counter)
+    {
+        /* measure current motor angle */
+        unsigned short current_angle = AS5600_ReadAngle();
+
+        /* judge whether the current angle decreases */
+        if (current_angle < last_angle)
+            positive_counter++;
+
+        /* update last angle as current angle */
+        last_angle = current_angle;
+
+        /* set that there is only a magnetic field on the straight axis */
+        // foc_calculate_dutycycle(angle, CALI_TORQUE, 0, &u, &v, &w);
+        FOC_control(0, open_loop_Uq);
+        angle -= 0.2f;
+        // update_pwm_dutycycle(u, v, w);
+        delayms(20);
+    }
+
+    /* zero the torque in all directions to release the motor */
+    // foc_calculate_dutycycle(0, 0, 0, &u, &v, &w);
+    // update_pwm_dutycycle(u, v, w);
+    FOC_control(0, 0);
+    delayms(300);
+
+    if (positive_counter >= 75)
+        phase_sequence = 0;
+    else if (positive_counter < 25)
+        phase_sequence = 1;
+    else
+        while (1)
+            ;
 }

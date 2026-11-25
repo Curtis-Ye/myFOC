@@ -1,6 +1,9 @@
 #ifndef __FOC_H
 #define __FOC_H
 #include "stdint.h"
+#include "tim.h"
+#include "AS5600.h"
+#include "delay.h"
 
 #define SIN_TAB_SIZE 1024
 #define SIN_TAB_SHIFT 6        // 16 - log2(1024)
@@ -9,6 +12,8 @@
 
 #define POLE_PAIRS 7           // 电机极对数
 #define FOC_CALL_FREQ 10000.0f // 10kHz
+
+#define open_loop_Uq 6000
 
 typedef struct ElectricAngle
 {
@@ -34,5 +39,6 @@ ElectricAngle park_inverse(uint16_t angle, int16_t Uq, int16_t Ud);
 ThreePhase clark_inverse(int16_t U_alpha, int16_t U_beta);
 void FOC_control(float current_angle, int16_t Uq);
 void FOC_OpenLoop_Update(void);
+void foc_calibrate_phase(void);
 
 #endif

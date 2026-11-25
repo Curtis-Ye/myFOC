@@ -3,6 +3,9 @@
 
 #include "main.h"
 #include "i2c.h"
+#include "stdint.h"
+#include "FOC.h"
+#include "control.h"
 
 /* AS5600 的 7 位固定地址是 0x36。
    HAL_I2C_* 接口需要"已左移 1 位"的 8 位形式，所以 << 1 得到 0x6C。 */
@@ -49,5 +52,5 @@ float AS5600_ReadAngle(void);
 HAL_StatusTypeDef AS5600_Probe(uint8_t addr_7bit);
 void AS5600_ReadDiagnostics(void);
 void AS5600_I2C_Recover(void); /* 外设复位 + 总线解锁，手动调用也行 */
-
+void encoder_zeroing(void);
 #endif
