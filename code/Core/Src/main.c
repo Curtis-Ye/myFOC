@@ -1,9 +1,4 @@
-#include "init.h"
-#include "control.h"
-
-// #define OPEN_LOOP
-// #define POSITION_LOOP
-#define VELOCITY_LOOP
+#include "main.h"
 
 void SystemClock_Config(void);
 
@@ -39,13 +34,20 @@ int main(void)
 
   peripheral_init(); // 外设初始化
 
-  HAL_TIM_Base_Start_IT(&htim3);             // 启动定时器中断，用于开环控制
-  HAL_UART_Receive_IT(&huart2, &rx_data, 1); // 启动串口接收中断
-
-  /* TIM1 是高级控制定时器：必须启动 PWM 才会置位 MOE 并使能计数器，否则引脚恒为无效电平 */
+  /* TIM1 是高级控制定时器：必须启动 PWM 才会置位 MOE 并使能计数器，否则引脚恒为无效电平。
+     必须先于 encoder_zeroing()，否则校准时 FOC_control() 只是写了 CCR 而电机根本不出力，
+     转子不会被拉到电角度零点，读到的偏移量毫无意义。 */
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+
+  /* 校准放在 PWM 启动之后、TIM2/TIM3 中断启动之前：
+     此时只有 TIM1 输出固定矢量，不会有 FOC 中断来覆盖 CCR。 */
+  encoder_zeroing();
+
+  HAL_TIM_Base_Start_IT(&htim3); // 启动定时器中断
+  HAL_TIM_Base_Start_IT(&htim2);
+  HAL_UART_Receive_IT(&huart2, &rx_data, 1); // 启动串口接收中断
 
   while (1)
   {
@@ -122,32 +124,3 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
-
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-  if (htim->Instance == TIM3)
-  {
-    /* 每个控制周期只测一次速度：get_velocity() 会更新 last_angle 和 delta_angle，
-       重复调用会让第二次的 delta 恒为 0，把调试变量洗掉。 */
-    float v = get_velocity();
-    g_velocity = v;
-
-#ifdef OPEN_LOOP
-    FOC_OpenLoop_Update();
-#endif
-
-#ifdef POSITION_LOOP
-    if (current_mode == SIMPLE)
-      position_control(0.0f);
-    else if (current_mode == USART)
-      velocity_control(usart_data);
-#endif
-
-#ifdef VELOCITY_LOOP
-    if (current_mode == SIMPLE)
-      velocity_control(-3600.0f, v);
-    else if (current_mode == USART)
-      velocity_control(usart_data, v);
-#endif
-  }
-}

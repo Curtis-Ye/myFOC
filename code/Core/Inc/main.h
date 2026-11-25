@@ -17,6 +17,8 @@
  ******************************************************************************
  */
 /* USER CODE END Header */
+#include "control.h"
+#include "init.h"
 
 /* Define to prevent recursive inclusion -------------------------------------*/
 #ifndef __MAIN_H
@@ -30,12 +32,21 @@ extern "C"
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f1xx_hal.h"
 
+// #define OPEN_LOOP
+// #define POSITION_LOOP
+#define VELOCITY_LOOP
+
   typedef enum Mode
   {
     SIMPLE,
     USART
   } Mode;
 
+  extern uint8_t current_mode;
+  extern volatile float usart_data;
+  extern volatile float g_velocity;
+  extern int16_t g_uq_out;
+  extern float g_elec_angle;
   /* Exported functions prototypes ---------------------------------------------*/
   void Error_Handler(void);
 

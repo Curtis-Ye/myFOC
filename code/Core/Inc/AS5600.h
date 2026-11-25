@@ -15,6 +15,8 @@
 #define AS5600_REG_ANGLE_H 0x0C
 #define AS5600_REG_ANGLE_L 0x0D
 
+#define MECHANGLE_COEFFICIENT (6.2831854f / 4096)
+
 /* 调试用：最近一次的 HAL 状态码和 I2C 错误码，直接在调试器里观察 */
 extern volatile HAL_StatusTypeDef AS5600_LastStatus;
 extern volatile uint32_t AS5600_LastError;

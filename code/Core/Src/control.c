@@ -10,16 +10,16 @@
    让电机啸叫或驱动过流。稳定后再逐步放开；只作用于速度环，不影响位置环。 */
 #define VEL_UQ_MAX 6000.0f
 
-/* 位置环调用频率，必须和实际调用位置一致（TIM3 中断或主循环节拍）。
-   TIM3: 72MHz / (71+1) / (499+1) = 2 kHz，见 tim.c 的 MX_TIM3_Init()。
+/* 速度函数调用频率，必须和实际调用位置一致（TIM3 中断或主循环节拍）。
+   TIM3: 72MHz / (71+1)  = 1000 kHz，见 tim.c 的 MX_TIM3_Init()。
    PID 的 Kp/Ki/Kd 都以这个周期为前提，改了这里参数要重调。 */
-#define CTRL_FREQ_HZ 2000.0f
+#define CTRL_FREQ_HZ 200.0f
 
 /* 分频累计测速：每 20 个控制周期（10 ms）用「窗口起点角度 -> 当前角度」算一次速度。
    12 位编码器 1 LSB = 0.088°，单周期测速的分辨率只有 0.088*2000 = 176 °/s，
    低速根本测不到；分频后分辨率 = 0.088 / 0.01 = 8.8 °/s。
    顺带把主循环 I2C 更新与中断不同步带来的节拍抖动平均掉了。 */
-#define VEL_DIV 20U
+#define VEL_DIV 4U
 
 /* 速度一阶低通系数。0.2 对应约 50 ms 滞后，对 100 Hz 速度环偏大、容易超调；
    提到 0.4 后时间常数约 25 ms，相位裕度明显改善。
@@ -34,15 +34,18 @@ PID pid2;
 
 volatile float current_angle = 0.0f; /* AS5600 读到的机械角，0 ~ 360 */
 volatile float last_angle = 0.0f;    /* 上次测速窗口起点的机械角 */
-float elec_angle = 0.0f;             /* 换算后的电角度，0 ~ 360 */
+float g_elec_angle = 0.0f;           /* 换算后的电角度，0 ~ 360 */
 float pid_error = 0.0f;              /* 归一化后的角度误差，调试用 */
 float pid_output = 0.0f;             /* PID 输出（float），调试用 */
 volatile float delta_angle = 0.0f;   /* 窗口内累计角度差（度/VEL_DIV 周期），调试用 */
-int16_t uq_out = 0;                  /* 最终送给 FOC 的 Uq，调试用 */
+int16_t g_uq_out = 0;                /* 最终送给 FOC 的 Uq，调试用 */
 
-/* 本周期是否产生了新的速度反馈（get_velocity 在窗口边界置 1）。
-   速度环 PI 只在它为 1 时计算，让控制周期 = 反馈周期 = 100 Hz，
-   否则 2 kHz 的积分会把同一个误差反复累加、10 ms 就饱和。 */
+/* 是否有「尚未被速度环取走」的新速度反馈。
+   生产者：get_velocity() 在测速窗口边界置 1，之后一直保持，不再自己清零。
+   消费者：velocity_control() 读到 1 后立刻清零，并算一次 PI。
+   必须这样握手：get_velocity 由 SysTick 每 5 ms 调用，velocity_control 由 TIM2
+   每 10 ms 调用，是两个独立时钟域。若生产者自清，1 只维持 5 ms，
+   相位一旦错开，TIM2 永远采样不到，PI 一次都不执行（g_uq_out 恒 0）。 */
 volatile uint8_t velocity_updated = 0;
 
 /* 电角度零点偏移（机械角度）。AS5600 的安装零点与电机电角度 0° 没有必然关系，
@@ -113,15 +116,15 @@ void position_control(float target_angle)
     pid_output = PID_calculate_error(&pid1, pid_error);
 
     /* 机械角 -> 电角度 */
-    elec_angle = (current_angle - elec_angle_offset) * (float)POLE_PAIRS;
-    while (elec_angle >= 360.0f)
-        elec_angle -= 360.0f;
-    while (elec_angle < 0.0f)
-        elec_angle += 360.0f;
+    g_elec_angle = (current_angle - elec_angle_offset) * (float)POLE_PAIRS;
+    while (g_elec_angle >= 360.0f)
+        g_elec_angle -= 360.0f;
+    while (g_elec_angle < 0.0f)
+        g_elec_angle += 360.0f;
 
     /* 力矩方向与 Uq 符号的对应关系是硬件属性，位置环同样要乘 */
-    uq_out = uq_from_float(pid_output * (float)uq_sign);
-    FOC_control(elec_angle, uq_out);
+    g_uq_out = uq_from_float(pid_output * (float)uq_sign);
+    FOC_control(g_elec_angle, g_uq_out);
 }
 
 /* 分频累计测速 -> 速度（度/s）
@@ -138,7 +141,8 @@ float get_velocity(void)
     static float vel_filt = 0.0f;
     static uint8_t vel_inited = 0;
 
-    velocity_updated = 0; /* 默认本周期没有新反馈，窗口边界才置 1 */
+    /* 这里不再清零 velocity_updated。标志是「新反馈待取走」的握手信号，
+       由消费者 velocity_control() 清零；生产者只负责在窗口边界置 1。 */
 
     /* 上电首帧先建立角度基准：last_angle 初值是 0，而开机时编码器可能停在任意角度，
        不处理的话第一个窗口会算出几百 °/s 的假速度，让电机上电猛冲一下。 */
@@ -169,7 +173,7 @@ float get_velocity(void)
 
         float v_raw = d * (CTRL_FREQ_HZ / VEL_DIV); /* 度 / 0.01s = 度/s */
         vel_filt += VEL_LPF_ALPHA * (v_raw - vel_filt);
-        velocity_updated = 1; /* 有新反馈，通知速度环算一次 PI */
+        velocity_updated = 1; /* 有新反馈：保持为 1，直到速度环取走（消费者清零） */
     }
 
     return vel_filt;
@@ -185,34 +189,34 @@ void velocity_control_init(void)
        PI 已改为按 100 Hz（测速窗口）计算，积分不再按 2 kHz 累加。 */
     PID_Init(&pid2,
              /*Kp*/ 5.0f,
-             /*Ki*/ 0.5f,
+             /*Ki*/ 0.1f,
              /*Kd*/ 0.0f,
              /*max_output*/ VEL_UQ_MAX,
              /*min_output*/ -VEL_UQ_MAX,
-             /*integral_limit*/ 5000.0f);
+             /*integral_limit*/ 25000.0f);
 }
 
 void velocity_control(float target_velocity, float current_velocity)
 {
     /* 速度误差是线性量，不需要像位置环那样做 0/360 归一化。
-       PI 只在新速度反馈到达时算一次（100 Hz），其余周期沿用上次输出；
-       否则 2 kHz 的积分会把同一个误差反复累加、10 ms 就饱和。
-       电角度仍每 0.5 ms 刷新，才能跟随转子位置。 */
+       PI 只在「有未被取走的新速度反馈」时算一次，其余周期沿用上次输出，
+       避免高频积分把同一个误差反复累加。
+       先清零再计算：尽快把标志消费掉，缩短被 SysTick 抢占而丢标志的窗口。 */
     if (velocity_updated)
     {
+        velocity_updated = 0; /* 消费者清零：本次反馈已取走 */
         pid_error = target_velocity - current_velocity;
         pid_output = PID_calculate_error(&pid2, pid_error);
     }
 
     /* 机械角 -> 电角度 */
-    elec_angle = (current_angle - elec_angle_offset) * (float)POLE_PAIRS;
-    while (elec_angle >= 360.0f)
-        elec_angle -= 360.0f;
-    while (elec_angle < 0.0f)
-        elec_angle += 360.0f;
+    g_elec_angle = (current_angle - elec_angle_offset) * (float)POLE_PAIRS;
+    while (g_elec_angle >= 360.0f)
+        g_elec_angle -= 360.0f;
+    while (g_elec_angle < 0.0f)
+        g_elec_angle += 360.0f;
 
     /* pid_output 是 PID 原始输出，uq_out 是乘了方向符号后的实际输出，
        两者符号可能相反，看调试窗口时别混淆。 */
-    uq_out = uq_from_float(pid_output * (float)uq_sign);
-    FOC_control(elec_angle, uq_out);
+    g_uq_out = uq_from_float(pid_output * (float)uq_sign);
 }

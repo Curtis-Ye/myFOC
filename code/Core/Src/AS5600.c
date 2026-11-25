@@ -29,6 +29,8 @@ volatile uint16_t AS5600_Magnitude = 0;
 
 /* ==================== 参数 ==================== */
 volatile static uint64_t total_machine_angle = UINT64_MAX / 2;
+volatile uint16_t machine_angle_offset = 0;
+volatile uint16_t last_raw_angle = 0;
 /* 单次传输超时。原来用 100ms —— 一次总线卡死就要瞎掉 100ms（=200 个控制周期）。
    注意：开头等待 BUSY 标志清 0 的那一步用的是 HAL 内部的固定 25ms，不受这个参数影响。 */
 #define AS5600_TIMEOUT_MS 3U
@@ -135,15 +137,20 @@ uint16_t AS5600_ReadRawAngle(void)
 
 float AS5600_ReadAngle(void)
 {
-    uint16_t raw_angle;
+    uint16_t raw_angle = 0;
+    unsigned short temp = 0;
 
     raw_angle = AS5600_ReadRawAngle();
-
     /* 通信失败时返回负数，避免把 0xFFFF 换算成 5759.9° 这种无意义的角度 */
     if (raw_angle == 0xFFFF)
         return -1.0f;
 
-    return (raw_angle * 360.0f) / 4096.0f;
+    total_machine_angle += (raw_angle - last_raw_angle);
+
+    last_raw_angle = raw_angle;
+
+    temp = ((total_machine_angle - machine_angle_offset) % 4096);
+    return ((float)temp * MECHANGLE_COEFFICIENT);
 }
 
 /* 探测指定 7 位地址上是否有器件应答，用于确认 AS5600 到底挂在哪个地址 */
@@ -179,11 +186,11 @@ void encoder_zeroing(void)
     // update_pwm_dutycycle(u, v, w);
     FOC_control(0, open_loop_Uq);
     delayms(300);
-    elec_angle_offset = 0;
+    machine_angle_offset = 0;
     total_machine_angle = UINT64_MAX / 2;
 
     /* read the angle at this time as the offset angle */
-    elec_angle_offset = AS5600_ReadAngle();
+    machine_angle_offset = AS5600_ReadRawAngle();
 
     /* zero the torque in all directions to release the motor */
     // foc_calculate_dutycycle(0, 0, 0, &u, &v, &w);

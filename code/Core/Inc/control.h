@@ -17,7 +17,7 @@ extern float pid_error;            /* 归一化后的角度误差 */
 extern float pid_output;           /* PID 输出（float） */
 extern int16_t uq_out;             /* 送给 FOC 的 Uq */
 extern volatile float delta_angle; /* 累计角度差（度/VEL_DIV 周期），调试用 */
-extern volatile uint8_t velocity_updated; /* 本周期是否有新速度反馈（100 Hz 翻转） */
+extern volatile uint8_t velocity_updated; /* 新速度反馈待取走：get_velocity 置 1，velocity_control 清零 */
 extern volatile int8_t uq_sign;           /* Uq 方向符号：1 / -1，调试器可实时改 */
 
 void position_control_init(void); /* 上电调用一次 */
