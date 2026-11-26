@@ -181,6 +181,7 @@ void PendSV_Handler(void)
 
 /**
  * @brief This function handles System tick timer.
+ * 本项目用于计算速度
  */
 void SysTick_Handler(void)
 {
@@ -252,8 +253,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   if (htim->Instance == TIM3) // FOC计算
   {
-    // float v = get_velocity();
-    // g_velocity = v;
 
 #ifdef OPEN_LOOP
     FOC_OpenLoop_Update();
@@ -271,8 +270,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
       FOC_control(g_elec_angle, g_uq_out);
     else if (current_mode == USART)
     {
+      // velocity_control(usart_data, v);
     }
-    // velocity_control(usart_data, v);
+
 #endif
   }
 

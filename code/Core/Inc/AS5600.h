@@ -48,6 +48,11 @@ extern volatile uint32_t AS5600_RecoverCount; /* 触发总线恢复的次数 */
 extern volatile uint8_t AS5600_Status;     /* 0x0B: bit5=MD, bit4=ML, bit3=MH */
 extern volatile uint8_t AS5600_Agc;        /* 0x1A: 自动增益，3.3V 供电时范围 0..128 */
 extern volatile uint16_t AS5600_Magnitude; /* 0x1B/0x1C: 磁场幅值 0..4095 */
+extern volatile float g_machine_angle_offset;
+extern volatile float g_current_angle;
+extern volatile float g_last_angle;
+extern volatile uint32_t g_angle_updates;
+extern volatile uint32_t g_angle_errors;
 
 uint16_t AS5600_ReadRawAngle(void);
 float AS5600_ReadAngle(void);
@@ -55,4 +60,5 @@ HAL_StatusTypeDef AS5600_Probe(uint8_t addr_7bit);
 void AS5600_ReadDiagnostics(void);
 void AS5600_I2C_Recover(void); /* 外设复位 + 总线解锁，手动调用也行 */
 void encoder_zeroing(void);
+void encoder_task(void);
 #endif

@@ -47,6 +47,7 @@ extern "C"
   extern volatile float g_velocity;
   extern int16_t g_uq_out;
   extern float g_elec_angle;
+
   /* Exported functions prototypes ---------------------------------------------*/
   void Error_Handler(void);
 

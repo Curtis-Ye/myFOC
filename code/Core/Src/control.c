@@ -29,16 +29,14 @@
 /* ============================ 全局量 ============================ */
 /* 都放在这里，方便调试器直接观察 */
 
-PID pid1;
-PID pid2;
+PID pos_pid;
+PID vel_pid;
 
-volatile float current_angle = 0.0f; /* AS5600 读到的机械角，0 ~ 360 */
-volatile float last_angle = 0.0f;    /* 上次测速窗口起点的机械角 */
-float g_elec_angle = 0.0f;           /* 换算后的电角度，0 ~ 360 */
-float pid_error = 0.0f;              /* 归一化后的角度误差，调试用 */
-float pid_output = 0.0f;             /* PID 输出（float），调试用 */
-volatile float delta_angle = 0.0f;   /* 窗口内累计角度差（度/VEL_DIV 周期），调试用 */
-int16_t g_uq_out = 0;                /* 最终送给 FOC 的 Uq，调试用 */
+float g_elec_angle = 0.0f;         /* 换算后的电角度，0 ~ 360 */
+float pid_error = 0.0f;            /* 归一化后的角度误差，调试用 */
+float pid_output = 0.0f;           /* PID 输出（float），调试用 */
+volatile float delta_angle = 0.0f; /* 窗口内累计角度差（度/VEL_DIV 周期），调试用 */
+int16_t g_uq_out = 0;              /* 最终送给 FOC 的 Uq，调试用 */
 
 /* 是否有「尚未被速度环取走」的新速度反馈。
    生产者：get_velocity() 在测速窗口边界置 1，之后一直保持，不再自己清零。
@@ -47,14 +45,6 @@ int16_t g_uq_out = 0;                /* 最终送给 FOC 的 Uq，调试用 */
    每 10 ms 调用，是两个独立时钟域。若生产者自清，1 只维持 5 ms，
    相位一旦错开，TIM2 永远采样不到，PI 一次都不执行（g_uq_out 恒 0）。 */
 volatile uint8_t velocity_updated = 0;
-
-/* 电角度零点偏移（机械角度）。AS5600 的安装零点与电机电角度 0° 没有必然关系，
-   不校准会让 Uq 产生错误的力矩方向，速度环可能变成正反馈。
-   必须实测标定：电机空载，在调试器里实时改这个值、从小到大给 Uq，
-   找「同样 Uq 下转得最顺、电流最小 / 转速最高」的那个值，再写回代码。
-   7 对极下有 7 个等效点（彼此相差 360/7 ≈ 51.4°），任取一个即可。
-   默认 0 = 未校准。 */
-volatile float elec_angle_offset = 32.0f;
 
 /* Uq 输出方向符号：1 或 -1，调试器可实时改。
    当前力矩方向与编码器速度符号不匹配，速度环是正反馈：
@@ -100,7 +90,7 @@ static int16_t uq_from_float(float uq)
    积分和微分项永久失效。 */
 void position_control_init(void)
 {
-    PID_Init(&pid1,
+    PID_Init(&pos_pid,
              /*Kp*/ 1500.0f,
              /*Ki*/ 0.0f,
              /*Kd*/ 1000.0f,
@@ -112,11 +102,11 @@ void position_control_init(void)
 void position_control(float target_angle)
 {
     /* 位置环：误差先归一化，再交给 PID */
-    pid_error = angle_error(target_angle, current_angle);
-    pid_output = PID_calculate_error(&pid1, pid_error);
+    pid_error = angle_error(target_angle, g_current_angle);
+    pid_output = PID_calculate_error(&pos_pid, pid_error);
 
     /* 机械角 -> 电角度 */
-    g_elec_angle = (current_angle - elec_angle_offset) * (float)POLE_PAIRS;
+    g_elec_angle = (g_current_angle - g_machine_angle_offset) * (float)POLE_PAIRS;
     while (g_elec_angle >= 360.0f)
         g_elec_angle -= 360.0f;
     while (g_elec_angle < 0.0f)
@@ -149,7 +139,7 @@ float get_velocity(void)
     if (!vel_inited)
     {
         vel_inited = 1;
-        last_angle = current_angle;
+        g_last_angle = g_current_angle;
         delta_angle = 0.0f;
         return 0.0f;
     }
@@ -158,7 +148,7 @@ float get_velocity(void)
     {
         div_cnt = 0;
 
-        float d = current_angle - last_angle; /* 窗口内累计角度差 */
+        float d = g_current_angle - g_last_angle; /* 窗口内累计角度差 */
         if (d > 180.0f)
         {
             d -= 360.0f;
@@ -168,8 +158,8 @@ float get_velocity(void)
             d += 360.0f;
         }
 
-        last_angle = current_angle; /* 更新为下一个窗口的起点 */
-        delta_angle = d;            /* 供调试窗口观察 */
+        g_last_angle = g_current_angle; /* 更新为下一个窗口的起点 */
+        delta_angle = d;                /* 供调试窗口观察 */
 
         float v_raw = d * (CTRL_FREQ_HZ / VEL_DIV); /* 度 / 0.01s = 度/s */
         vel_filt += VEL_LPF_ALPHA * (v_raw - vel_filt);
@@ -187,7 +177,7 @@ void velocity_control_init(void)
        当前为纯 P（Ki=0），用于先验证环路是否稳定；
        确认平稳后再按 0.2~0.5 的步长慢慢加 Ki 消稳态误差。
        PI 已改为按 100 Hz（测速窗口）计算，积分不再按 2 kHz 累加。 */
-    PID_Init(&pid2,
+    PID_Init(&vel_pid,
              /*Kp*/ 5.0f,
              /*Ki*/ 0.1f,
              /*Kd*/ 0.0f,
@@ -206,11 +196,11 @@ void velocity_control(float target_velocity, float current_velocity)
     {
         velocity_updated = 0; /* 消费者清零：本次反馈已取走 */
         pid_error = target_velocity - current_velocity;
-        pid_output = PID_calculate_error(&pid2, pid_error);
+        pid_output = PID_calculate_error(&vel_pid, pid_error);
     }
 
     /* 机械角 -> 电角度 */
-    g_elec_angle = (current_angle - elec_angle_offset) * (float)POLE_PAIRS;
+    g_elec_angle = (g_current_angle - g_machine_angle_offset) * (float)POLE_PAIRS;
     while (g_elec_angle >= 360.0f)
         g_elec_angle -= 360.0f;
     while (g_elec_angle < 0.0f)

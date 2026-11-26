@@ -28,9 +28,12 @@ volatile uint8_t AS5600_Agc = 0;
 volatile uint16_t AS5600_Magnitude = 0;
 
 /* ==================== 参数 ==================== */
-volatile static uint64_t total_machine_angle = UINT64_MAX / 2;
-volatile uint16_t machine_angle_offset = 0;
-volatile uint16_t last_raw_angle = 0;
+volatile uint32_t g_angle_updates = 0;     /* 编码器成功采样次数，用来看数据新鲜度 */
+volatile uint32_t g_angle_errors = 0;      /* I2C 失败次数 */
+volatile float g_machine_angle_offset = 0; /* 机械角度偏移值 */
+volatile float g_current_angle = 0.0f;     /* AS5600 读到的机械角，0 ~ 360 */
+volatile float g_last_angle = 0.0f;        /* 上次测速窗口起点的机械角 */
+
 /* 单次传输超时。原来用 100ms —— 一次总线卡死就要瞎掉 100ms（=200 个控制周期）。
    注意：开头等待 BUSY 标志清 0 的那一步用的是 HAL 内部的固定 25ms，不受这个参数影响。 */
 #define AS5600_TIMEOUT_MS 3U
@@ -97,6 +100,7 @@ void AS5600_I2C_Recover(void)
 
 /* ==================== 主接口 ==================== */
 
+/* 获取原始角度数据，范围0~4095 */
 uint16_t AS5600_ReadRawAngle(void)
 {
     uint8_t data[2];
@@ -135,22 +139,17 @@ uint16_t AS5600_ReadRawAngle(void)
     return 0xFFFF;
 }
 
+/* 返回机械角，范围0~360 */
 float AS5600_ReadAngle(void)
 {
     uint16_t raw_angle = 0;
-    unsigned short temp = 0;
 
     raw_angle = AS5600_ReadRawAngle();
     /* 通信失败时返回负数，避免把 0xFFFF 换算成 5759.9° 这种无意义的角度 */
     if (raw_angle == 0xFFFF)
         return -1.0f;
 
-    total_machine_angle += (raw_angle - last_raw_angle);
-
-    last_raw_angle = raw_angle;
-
-    temp = ((total_machine_angle - machine_angle_offset) % 4096);
-    return ((float)temp * MECHANGLE_COEFFICIENT);
+    return ((raw_angle * 360.0f) / 4096.0f);
 }
 
 /* 探测指定 7 位地址上是否有器件应答，用于确认 AS5600 到底挂在哪个地址 */
@@ -176,25 +175,36 @@ void AS5600_ReadDiagnostics(void)
         AS5600_Magnitude = (uint16_t)((((uint16_t)m[0] << 8) | m[1]) & 0x0FFF);
 }
 
+/* 获取角度偏移量 */
 void encoder_zeroing(void)
 {
     /* delay to wait for the power supply voltage to be normal */
     delayms(1000);
 
     /* set that there is only a magnetic field on the straight axis. */
-    // foc_calculate_dutycycle(0, CALI_TORQUE, 0, &u, &v, &w);
-    // update_pwm_dutycycle(u, v, w);
     FOC_control(0, open_loop_Uq);
     delayms(300);
-    machine_angle_offset = 0;
-    total_machine_angle = UINT64_MAX / 2;
+    g_machine_angle_offset = 0;
 
     /* read the angle at this time as the offset angle */
-    machine_angle_offset = AS5600_ReadRawAngle();
+    g_machine_angle_offset = AS5600_ReadAngle();
 
     /* zero the torque in all directions to release the motor */
-    // foc_calculate_dutycycle(0, 0, 0, &u, &v, &w);
-    // update_pwm_dutycycle(u, v, w);
     FOC_control(0, 0);
     delayms(300);
+}
+
+/* 获取编码器角度 */
+void encoder_task(void)
+{
+    float a = AS5600_ReadAngle(); /* 失败返回 -1.0f */
+    if (a >= 0.0f)
+    {
+        g_current_angle = a;
+        g_angle_updates++;
+    }
+    else
+    {
+        g_angle_errors++;
+    }
 }

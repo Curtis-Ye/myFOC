@@ -3,27 +3,11 @@
 void SystemClock_Config(void);
 
 /* 跨文件共享的变量统一在 control.h 声明，这里不再另写 extern */
-volatile uint32_t g_angle_updates = 0; /* 编码器成功采样次数，用来看数据新鲜度 */
-volatile uint32_t g_angle_errors = 0;  /* I2C 失败次数 */
 extern uint8_t rx_data;
 volatile float usart_data = 0.0;  // 从串口获取的数据
 volatile float g_velocity = 0.0f; // 速度观测值（度/s），调试用
 
 uint8_t current_mode = SIMPLE; // 默认模式：普通模式；串口模式将其配置为USART
-
-void encoder_task(void)
-{
-  float a = AS5600_ReadAngle(); /* 失败返回 -1.0f */
-  if (a >= 0.0f)
-  {
-    current_angle = a;
-    g_angle_updates++;
-  }
-  else
-  {
-    g_angle_errors++;
-  }
-}
 
 int main(void)
 {
