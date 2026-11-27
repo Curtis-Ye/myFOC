@@ -16,6 +16,8 @@ float open_loop_elec_freq = 2.0f;  // 电频率 2Hz
 
 volatile unsigned char phase_sequence = 0;
 
+ThreePhase threephase;
+
 // Q15: -32768 ~ 32767 对应 -1.0 ~ 1.0
 // 由 PC 端生成，或初始化时用 sinf 生成一次
 const int16_t sin_tab[1025] = {
@@ -1127,7 +1129,7 @@ void FOC_control(float current_angle, int16_t Uq)
 {
     uint16_t Angle = angle_reverse(current_angle); // 角度转化Q15对应值
     ElectricAngle electricangle;
-    ThreePhase threephase;
+    // ThreePhase threephase;
     Duty duty;
 
     electricangle = park_inverse(Angle, Uq, 0);

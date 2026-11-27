@@ -33,8 +33,8 @@ extern "C"
 #include "stm32f1xx_hal.h"
 
 // #define OPEN_LOOP
-// #define POSITION_LOOP
-#define VELOCITY_LOOP
+ #define POSITION_LOOP
+//#define VELOCITY_LOOP
 
   typedef enum Mode
   {
@@ -46,8 +46,7 @@ extern "C"
   extern volatile float usart_data;
   extern volatile float g_velocity;
   extern int16_t g_uq_out;
-  extern float g_elec_angle;
-
+	extern float test_velocity;
   /* Exported functions prototypes ---------------------------------------------*/
   void Error_Handler(void);
 

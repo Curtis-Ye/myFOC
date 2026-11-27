@@ -182,7 +182,7 @@ void encoder_zeroing(void)
     delayms(1000);
 
     /* set that there is only a magnetic field on the straight axis. */
-    FOC_control(0, open_loop_Uq);
+    FOC_control(270, open_loop_Uq);
     delayms(300);
     g_machine_angle_offset = 0;
 

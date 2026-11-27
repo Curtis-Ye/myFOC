@@ -9,9 +9,10 @@ volatile float g_velocity = 0.0f; // 速度观测值（度/s），调试用
 
 uint8_t current_mode = SIMPLE; // 默认模式：普通模式；串口模式将其配置为USART
 
+float test_velocity = 0;
+
 int main(void)
 {
-
   HAL_Init();
 
   SystemClock_Config();
@@ -27,7 +28,7 @@ int main(void)
 
   /* 校准放在 PWM 启动之后、TIM2/TIM3 中断启动之前：
      此时只有 TIM1 输出固定矢量，不会有 FOC 中断来覆盖 CCR。 */
-  encoder_zeroing();
+ // encoder_zeroing();
 
   HAL_TIM_Base_Start_IT(&htim3); // 启动定时器中断
   HAL_TIM_Base_Start_IT(&htim2);

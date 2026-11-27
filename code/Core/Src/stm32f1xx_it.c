@@ -194,7 +194,7 @@ void SysTick_Handler(void)
   if (systick_counter == (1000 / 200))
   {
     systick_counter = 0;
-    g_velocity = get_velocity();
+    // g_velocity = get_velocity();
   }
   /* USER CODE END SysTick_IRQn 1 */
 }
@@ -253,16 +253,20 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   if (htim->Instance == TIM3) // FOC计算
   {
-
+    g_elec_angle = (g_current_angle - g_machine_angle_offset) * (float)POLE_PAIRS;
+    while (g_elec_angle >= 360.0f)
+      g_elec_angle -= 360.0f;
+    while (g_elec_angle < 0.0f)
+      g_elec_angle += 360.0f;
 #ifdef OPEN_LOOP
     FOC_OpenLoop_Update();
 #endif
 
 #ifdef POSITION_LOOP
     if (current_mode == SIMPLE)
-      position_control(0.0f);
-    else if (current_mode == USART)
-      velocity_control(usart_data);
+      FOC_control(g_elec_angle, g_uq_out);
+    else if (current_mode == USART){}
+//      velocity_control(usart_data);
 #endif
 
 #ifdef VELOCITY_LOOP
@@ -278,6 +282,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
   else if (htim->Instance == TIM2) // PID计算
   {
-    velocity_control(100.0f, g_velocity);
+#ifdef VELOCITY_LOOP
+    g_velocity = get_velocity();
+    velocity_control(test_velocity, g_velocity);
+#endif
+
+#ifdef POSITION_LOOP
+    position_control(0.0);
+#endif
   }
 }
